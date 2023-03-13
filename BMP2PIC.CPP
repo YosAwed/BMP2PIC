@@ -206,6 +206,7 @@ int main ( int argc , char * argv [ ] )
   puts ( "X68k BMP2PIC v0.03 Copyright 1994 Arimac" ) ;
   puts ( "BMP to PIC File Converter (2/16/256/16M Colors)" ) ;
   puts ( "cshwild (By Mad Player) included" ) ;
+  puts ( "Windows ported 2023 Awed" );
 
   if ( x_arg_chk ( argc , argv ) != 0 ) goto lb600 ;
 
@@ -779,7 +780,7 @@ lb800 :
 static void x_write_hdr ( int cl_bit1 )
 {
 
-    char hed[11]; 
+    char hed[13]; 
     sprintf(hed, "PIC/MM/XSS/:");
     str_write ( hed ) ;
     bit_write ( 8 , 0x1A ) ;
@@ -1440,9 +1441,9 @@ static void x_conv_line24 ( PIXEL * img_pt1 , char * bmp_pt1 , int sxl1 )
   int wred1 , wgreen1 , wblue1 ;
 
   while ( sxl1 -- ) {
-    wblue1  = * bmp_pt1 ++ ;
-    wgreen1 = * bmp_pt1 ++ ;
-    wred1   = * bmp_pt1 ++ ;
+    wblue1  = * (unsigned char*) bmp_pt1 ++ ;
+    wgreen1 = * (unsigned char*) bmp_pt1 ++ ;
+    wred1   = * (unsigned char*) bmp_pt1 ++ ;
 
     * img_pt1 ++ = 
         red_cnv_tbl   [ wred1   ] +
