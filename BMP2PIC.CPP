@@ -77,10 +77,10 @@ static char bmp_inf_hdr_swap [ ] = {
 /* ---------------------------------------------------------------- */
 
 typedef struct {
-  char rgbBlue ;
-  char rgbGreen ;
-  char rgbRed ;
-  char rgbReserved ;
+  uchar rgbBlue ;
+  uchar rgbGreen ;
+  uchar rgbRed ;
+  uchar rgbReserved ;
 } RGB_QUAD ;
 
 /* ---------------------------------------------------------------- */
@@ -806,7 +806,7 @@ static void str_write ( char *str_pt1 )
 
 static void x_conv_palette ( int cl_bit1 )
 {
-  int rgb_size1 , cl_max1 , cl_cnt1 , cl_cnt2 ;
+  uint rgb_size1 , cl_max1 , cl_cnt1 , cl_cnt2 ;
   RGB_QUAD * rgb_pt1 ;
 
   if ( bmp_inf_hdr . biSize != sizeof ( bmp_inf_hdr ) ) {
