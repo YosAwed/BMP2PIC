@@ -1,4 +1,4 @@
-﻿
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -87,8 +87,8 @@ typedef struct {
 
 static struct CL_CACHE {
   PIXEL color ;
-  char next ;
-  char prev ;
+  uchar next ;
+  uchar prev ;
 } cl_cache [ 128 ] ;
 
 static int cur_cl_ix ;
@@ -193,7 +193,8 @@ static PIXEL blue_cnv_tbl  [ 256 ] ;
 /* ---------------------------------------------------------------- */
 
 #define x_strlen(s)	strlen ( ( char * ) ( s ) )
-#define x_strcpy(d,s)	strcpy ( ( char * ) ( d ) , ( char * ) ( s ) )
+template<typename T1, typename T2>
+constexpr auto x_strcpy(T1 d, T2 s) { return strcpy ( ( char * ) ( d ) , ( char * ) ( s ) ); }
 
 /* ---------------------------------------------------------------- */
 
@@ -207,6 +208,7 @@ int main ( int argc , char * argv [ ] )
   puts ( "BMP to PIC File Converter (2/16/256/16M Colors)" ) ;
   puts ( "cshwild (By Mad Player) included" ) ;
   puts ( "Windows ported 2023 Awed" );
+
 
   if ( x_arg_chk ( argc , argv ) != 0 ) goto lb600 ;
 
@@ -489,7 +491,7 @@ static void x_swap_bytes ( void * buf_pt1 , char * ctl_pt1 , int cnt1 )
 
 static int x_bmp_pic_conv1 ( void )
 {
-  int big_img_sw1 , oy1 , syl1 ;
+  uint big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -561,7 +563,7 @@ lb800 :
 
 static int x_bmp_pic_conv4 ( void )
 {
-  int big_img_sw1 , oy1 , syl1 ;
+  uint big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -633,7 +635,7 @@ lb800 :
 
 static int x_bmp_pic_conv8 ( void )
 {
-  int big_img_sw1 , oy1 , syl1 ;
+  uint big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -704,7 +706,7 @@ lb800 :
 
 static int x_bmp_pic_conv24 ( void )
 {
-  int big_img_sw1 , oy1 , syl1 ;
+  uint big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -824,7 +826,7 @@ static void x_conv_palette ( int cl_bit1 )
   }
 
   rgb_size1 = sizeof ( RGB_QUAD ) * cl_cnt1 ;
-  rgb_pt1 = (RGB_QUAD*) _malloca ( rgb_size1 ) ;
+  rgb_pt1 = (RGB_QUAD *) _malloca ( rgb_size1 ) ;
 
   if ( fread ( rgb_pt1 , 1,rgb_size1, bmp_f)  != rgb_size1 ) {
     printf ( "%s can't read (color table)\n" , bmp_fname_pt1 ) ;
@@ -980,9 +982,9 @@ static void x_compress1 ( int oy1 , int syl1 )
 static void x_compress_chain1 ( int sx1 , int sy1 ,
     char * edge_map_pt1 , char * img_buf_pt1 , char cl1 )
 {
-  int fsw1 , wlen1 , wdata1 ;
-  uint img_xl1 ;
-  char wmask1 ;
+  uint fsw1 , wlen1 , wdata1 ;
+  int img_xl1 ;
+  uchar wmask1 ;
 
   fsw1 = 0 ;
   img_xl1 = bmp_inf_hdr . biWidth ;
@@ -1170,7 +1172,7 @@ static void x_compress_chain4 ( int sx1 , int sy1 ,
     char * edge_map_pt1 , char * img_buf_pt1 , char cl1 )
 {
   int fsw1 , wlen1 , wdata1 ;
-  uint img_xl1 ;
+  int img_xl1 ;
   char cl2 ;
   uchar cl_mask1 ;
 
@@ -1236,7 +1238,7 @@ static void x_compress_chain4 ( int sx1 , int sy1 ,
 static void x_mark_diff_point8 ( int oy1 , int syl1 )
 {
   int sx1 , sy1 ;
-  uint img_xl1 ;
+  int img_xl1 ;
   char cl1 , cl2 , wverbose1 ;
   char * edge_map_pt1 ;
   char * img_buf_pt1 ;
@@ -1333,7 +1335,7 @@ static void x_compress_chain8 ( int sx1 , int sy1 ,
     char * edge_map_pt1 , char * img_buf_pt1 , char cl1 )
 {
   int fsw1 , wlen1 , wdata1 ;
-  uint img_xl1 ;
+  int img_xl1 ;
 
   fsw1 = 0 ;
   img_xl1 = bmp_inf_hdr . biWidth ;
@@ -1389,7 +1391,7 @@ static void x_compress_chain8 ( int sx1 , int sy1 ,
 
 static void x_read_bmp_image24 ( int oy1 , int syl1 )
 {
-  uint img_xl1 , bmp_xb1 ;
+  int img_xl1 , bmp_xb1 ;
   char * bmp_buf1 ;
   PIXEL * img_pt1 ;
 
@@ -1474,7 +1476,7 @@ static void x_init_color_cash ( void )
 static void x_mark_diff_point16 ( int oy1 , int syl1 )
 {
   int sx1 , sy1 ;
-  uint img_xl1 ;
+  int img_xl1 ;
   PIXEL cl1 , cl2 ;
   char wverbose1 ;
   char * edge_map_pt1 ;
@@ -1573,7 +1575,7 @@ static void x_compress_chain15 ( int sx1 , int sy1 ,
     char * edge_map_pt1 , PIXEL * img_buf_pt1 , PIXEL cl1 )
 {
   int fsw1 , wlen1 , wdata1 ;
-  uint img_xl1 ;
+  int img_xl1 ;
 
   fsw1 = 0 ;
   img_xl1 = bmp_inf_hdr . biWidth ;
