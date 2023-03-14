@@ -18,8 +18,8 @@
 #define _ENDIAN 1
 
 typedef unsigned char BYTE;
-typedef unsigned int WORD; // two-byte word
-typedef unsigned long DWORD; // four-byte double word
+typedef unsigned short WORD; // two-byte word
+typedef unsigned int DWORD; // four-byte double word
 
 #ifdef _RUN_TIME_ENDIAN
 
