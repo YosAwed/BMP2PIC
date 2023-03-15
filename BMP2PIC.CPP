@@ -157,7 +157,7 @@ static char dos_mode = 1 ;		/* 1:パスの区切りを￥に変換する。 */
 static char info_mode = 0 ;		/* 1:情報表示モード */
 static char * out_dir1 = NULL ;	/* 出力先指定 */
 static char trans_mode = 0 ;		/* 1:拡張子 .BMP を付けない。 */
-static char verbose_mode = 1 ;		/* 1:お喋りモード */
+static char verbose_mode = 0 ;		/* 1:お喋りモード */
 
 static char * bmp_fname_pt1 ;
 static int bmp_fh ;
@@ -429,7 +429,8 @@ static int x_bmp_pic_conv ( char * path_pt1 , int dir_len1 )
 
 
   pic_put_pt = pic_buf ;
-  buff_len = numberof ( pic_buf ) ;
+  buff_len = numberof(pic_buf);
+ 
   bit_len = sizeof ( pic_bit_data ) * 8 ;
 
   if ( ( * proc_pt1 ) ( ) != 0 ) goto lb800 ;
@@ -547,15 +548,15 @@ static int x_bmp_pic_conv1 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  free ( img_buf8 ) ;
+  _freea ( img_buf8 ) ;
   img_buf8 = NULL ;
-  free ( edge_map1 ) ;
+  _freea ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf8  != NULL ) free ( img_buf8  ) ;
-  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
+  if ( img_buf8  != NULL ) _freea ( img_buf8  ) ;
+  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -619,15 +620,15 @@ static int x_bmp_pic_conv4 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  free ( img_buf8 ) ;
+  _freea ( img_buf8 ) ;
   img_buf8 = NULL ;
-  free ( edge_map1 ) ;
+  _freea ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf8  != NULL ) free ( img_buf8  ) ;
-  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
+  if ( img_buf8  != NULL ) _freea ( img_buf8  ) ;
+  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -690,15 +691,15 @@ static int x_bmp_pic_conv8 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  free ( img_buf8 ) ;
+  _freea ( img_buf8 ) ;
   img_buf8 = NULL ;
-  free ( edge_map1 ) ;
+  _freea ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf8  != NULL ) free ( img_buf8  ) ;
-  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
+  if ( img_buf8  != NULL ) _freea ( img_buf8  ) ;
+  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -765,15 +766,15 @@ static int x_bmp_pic_conv24 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  free ( img_buf16 ) ;
+  _freea ( img_buf16 ) ;
   img_buf16 = NULL ;
-  free ( edge_map1 ) ;
+  _freea ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf16 != NULL ) free ( img_buf16 ) ;
-  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
+  if ( img_buf16 != NULL ) _freea ( img_buf16 ) ;
+  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -782,8 +783,7 @@ lb800 :
 static void x_write_hdr ( int cl_bit1 )
 {
 
-    char hed[13]; 
-    sprintf(hed, "PIC/MM/XSS/:");
+    char hed[] = "PIC/MM/XSS/:";
     str_write ( hed ) ;
     bit_write ( 8 , 0x1A ) ;
     bit_write ( 8 , 0 ) ;
@@ -1739,6 +1739,7 @@ static void bit_write ( int wlen1 , uint wdata1 )
   pic_bit_data = ( pic_bit_data << wlen1 ) | wdata1 ;
   // pic_bit_data = ( pic_bit_data ) | (wdata1 <<(32-bit_len));
   bit_len -= wlen1 ;
+
 }
 
 /* ---------------------------------------------------------------- */
@@ -1753,6 +1754,8 @@ static void x_flush_buff ( void )
 
   wlen1 = ( numberof ( pic_buf ) - buff_len ) * sizeof ( * pic_buf ) +
           ( ( ( 32 + 7 ) - bit_len ) >> 3 ) ;
+
+  //  printf("%d\n", wlen1);
 
   if ( wlen1 > 0 ) {
     if ( fwrite ( pic_buf , 1, wlen1 , pic_f ) != wlen1 ) {
