@@ -1,3 +1,29 @@
+/* ----------------------------------------------------------------- *
+* PROGRAM-ID.	BMP2PIC.C					     *
+* AUTHOR.	ARIMAC.						     *
+* DATE-WRITTEN.	1994.05.30					     *
+* REMARKS.							     *
+*								     *
+*　・MS-Windows の BMP ファイルを PIC ファイルに変換する。	     *
+*　・ただし、２／１６／２５６／１６７８万色非圧縮のファイルのみ	     *
+*　　対応。							     *
+*								     *
+* HISTORY.							     *
+*								     *
+*　 1994.05.30	v0.01 誕生					     *
+*								     *
+*　 1994.08.23	v0.02 出力先ディレクトリを指定出来るようにした。     *
+*		      512ライン超え分割画像のエッジマップの初期化を  *
+*		      忘れていた。				     *
+*								     *
+*　 1994.09.21	v0.03 エラーになったファイルは無視するようにした。   *
+*		      変換中のラインが分かるようにした。	     *
+*		      ２色画像の変化点の探査を失敗してた(^^;	     *
+*		      高速化。					     *
+*								     *
+* ----------------------------------------------------------------- */
+
+/* Windows ported 2023.03 by Awed (Thanks nozwaz) */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,8 +113,8 @@ typedef struct {
 
 static struct CL_CACHE {
   PIXEL color ;
-  uchar next ;
-  uchar prev ;
+  char next ;
+  char prev ;
 } cl_cache [ 128 ] ;
 
 static int cur_cl_ix ;
@@ -100,7 +126,7 @@ static void x_print_help ( int argc , char * argv [ ] ) ;
 static int x_file_proc ( char * fname_pt1 ) ;
 
 static int x_bmp_pic_conv ( char * fname_pt1 , int dir_len1 ) ;
-static void x_swap_bytes ( void * buf_pt1 , char * ctl_pt1 , int cnt1 ) ;
+static void x_swap_bytes ( void * buf_pt1 , uchar * ctl_pt1 , int cnt1 ) ;
 
 static int x_bmp_pic_conv1 ( void ) ;
 static int x_bmp_pic_conv4 ( void ) ;
@@ -108,7 +134,7 @@ static int x_bmp_pic_conv8 ( void ) ;
 static int x_bmp_pic_conv24 ( void ) ;
 
 static void x_write_hdr ( int cl_bit1 ) ;
-static void str_write ( char * str_pt1 ) ;
+static void str_write ( uchar * str_pt1 ) ;
 static void x_conv_palette ( int cl_bit1 ) ;
 static void x_read_bmp_image8 ( int oy1 , int syl1 ) ;
 
@@ -116,29 +142,29 @@ static void x_mark_diff_point1 ( int oy1 , int syl1 ) ;
 static void x_compress1 ( int oy1 , int syl1 ) ;
 
 static void x_compress_chain1 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , char * img_buf_pt1 ,  char cl1 ) ;
+    uchar * edge_map_pt1 , uchar * img_buf_pt1 , uchar cl1 ) ;
 
 static void x_mark_diff_point4 ( int oy1 , int syl1 ) ;
 static void x_compress4 ( int oy1 , int syl1 ) ;
 
 static void x_compress_chain4 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , char * img_buf_pt1 , char cl1 ) ;
+    uchar * edge_map_pt1 , uchar * img_buf_pt1 , uchar cl1 ) ;
 
 static void x_mark_diff_point8 ( int oy1 , int syl1 ) ;
 static void x_compress8 ( int oy1 , int syl1 ) ;
 
 static void x_compress_chain8 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , char * img_buf_pt1 , char cl1 ) ;
+    uchar * edge_map_pt1 , uchar * img_buf_pt1 , uchar cl1 ) ;
 
 static void x_read_bmp_image24 ( int oy1 , int syl1 ) ;
 static void mk_cnvtbl ( void ) ;
-static void x_conv_line24 ( PIXEL * img_pt1 , char * bmp_pt1 , int sxl1 ) ;
+static void x_conv_line24 ( PIXEL * img_pt1 , uchar * bmp_pt1 , int sxl1 ) ;
 static void x_init_color_cash ( void ) ;
 static void x_mark_diff_point16 ( int oy1 , int syl1 ) ;
 static void x_compress15 ( int oy1 , int syl1 ) ;
 
 static void x_compress_chain15 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , PIXEL * img_buf_pt1 , PIXEL cl1 ) ;
+    uchar * edge_map_pt1 , PIXEL * img_buf_pt1 , PIXEL cl1 ) ;
 
 static void write_len ( int n ) ;
 static void write_color15 ( PIXEL cl1 ) ;
@@ -182,8 +208,8 @@ static uint pic_buf [ 2048 ] ;
 
 static jmp_buf wenv1 ;
 
-static char * edge_map1 ;	/* ２色は big endian、その他は little endian */
-static char * img_buf8 ;
+static uchar * edge_map1 ;	/* ２色は big endian、その他は little endian */
+static uchar * img_buf8 ;
 static PIXEL * img_buf16 ;
 
 static PIXEL red_cnv_tbl   [ 256 ] ;
@@ -193,8 +219,7 @@ static PIXEL blue_cnv_tbl  [ 256 ] ;
 /* ---------------------------------------------------------------- */
 
 #define x_strlen(s)	strlen ( ( char * ) ( s ) )
-template<typename T1, typename T2>
-constexpr auto x_strcpy(T1 d, T2 s) { return strcpy ( ( char * ) ( d ) , ( char * ) ( s ) ); }
+#define x_strcpy(d,s)	strcpy ( ( char * ) ( d ) , ( char * ) ( s ) )
 
 /* ---------------------------------------------------------------- */
 
@@ -297,14 +322,14 @@ static int x_file_proc ( char * path_pt1 )
   if ( ( ch_pt1 = strrchr ( fname_pt1 , ':'  ) ) != NULL ) fname_pt1 = ch_pt1 + 1 ;
 
   if ( trans_mode == 0 && strchr ( fname_pt1 , '.' ) == NULL ) {
-    path_pt2 = (char*) _malloca (  x_strlen ( path_pt1 ) + 5 ) ;
+    path_pt2 = (char*) malloc (  x_strlen ( path_pt1 ) + 5 ) ;
     sprintf (  path_pt2 , "%s.BMP" , path_pt1 ) ;
    } else {
     path_pt2 = path_pt1 ;
   }
 
   if ( dos_mode != 0 ) {
-    path_pt3 = (char*) _malloca ( x_strlen ( path_pt2 ) + 1 ) ;
+    path_pt3 = (char*) malloc ( x_strlen ( path_pt2 ) + 1 ) ;
     x_strcpy ( path_pt3 , path_pt2 ) ;
     ch_pt1 = path_pt3 ;
     while ( ( ch_pt1 = strchr ( ch_pt1 , '/' ) ) != NULL ) * ch_pt1 ++ = '\\' ;
@@ -330,7 +355,7 @@ static int x_bmp_pic_conv ( char * path_pt1 , int dir_len1 )
   if ( out_dir1 != NULL ) {
     wlen1 = x_strlen ( out_dir1 ) ;
     wlen2 = x_strlen ( path_pt1 + dir_len1 ) ;
-    path_pt2 = (char *) _malloca ( wlen1 + wlen2 + 2 ) ;
+    path_pt2 = (char *) malloc ( wlen1 + wlen2 + 2 ) ;
     if ( wlen1 > 0 ) {
       memcpy ( path_pt2 , out_dir1 , wlen1 ) ;
       wch1 = out_dir1 [ wlen1 - 1 ] ;
@@ -352,7 +377,7 @@ static int x_bmp_pic_conv ( char * path_pt1 , int dir_len1 )
     wlen1 = ch_pt1 - path_pt2 ;
   }
 
-  pic_fname_pt1 = (char*) _malloca ( wlen1 + 5 ) ;
+  pic_fname_pt1 = (char*) malloc ( wlen1 + 5 ) ;
   memcpy ( pic_fname_pt1 , path_pt2 , wlen1 ) ;
   x_strcpy ( pic_fname_pt1 + wlen1 , ".PIC" ) ;
 
@@ -469,7 +494,7 @@ lb900 :
 
 /* ---------------------------------------------------------------- */
 
-static void x_swap_bytes ( void * buf_pt1 , char * ctl_pt1 , int cnt1 )
+static void x_swap_bytes ( void * buf_pt1 , uchar * ctl_pt1 , int cnt1 )
 {
   int cnt2 ;
   char wch1 ;
@@ -520,12 +545,12 @@ static int x_bmp_pic_conv1 ( void )
   edge_xb1 = ( img_xl1 + 7 ) >> 3 ;
   edge_sz1 = edge_xb1 * buf_yl1 ;
 
-  if ( ( edge_map1 = (char *)_malloca ( edge_sz1 ) ) == NULL ) {
+  if ( ( edge_map1 = (uchar *)malloc ( edge_sz1 ) ) == NULL ) {
     puts ( "edge_map can't alloc" ) ;
     goto lb800 ;
   }
 
-  if ( ( img_buf8 = (char*)_malloca ( buf_sz1 ) ) == NULL ) {
+  if ( ( img_buf8 = (uchar*)malloc ( buf_sz1 ) ) == NULL ) {
     puts ( "img_buf can't alloc" ) ;
     goto lb800 ;
   }
@@ -548,15 +573,15 @@ static int x_bmp_pic_conv1 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  _freea ( img_buf8 ) ;
+  free ( img_buf8 ) ;
   img_buf8 = NULL ;
-  _freea ( edge_map1 ) ;
+  free ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf8  != NULL ) _freea ( img_buf8  ) ;
-  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
+  if ( img_buf8  != NULL ) free ( img_buf8  ) ;
+  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -564,7 +589,7 @@ lb800 :
 
 static int x_bmp_pic_conv4 ( void )
 {
-  uint big_img_sw1 , oy1 , syl1 ;
+  int big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -592,12 +617,12 @@ static int x_bmp_pic_conv4 ( void )
   edge_xb1 = ( img_xl1 + 7 ) >> 3 ;
   edge_sz1 = edge_xb1 * buf_yl1 ;
 
-  if ( ( edge_map1 = (char*)_malloca ( edge_sz1 ) ) == NULL ) {
+  if ( ( edge_map1 = (uchar*)malloc ( edge_sz1 ) ) == NULL ) {
     puts ( "edge_map can't alloc" ) ;
     goto lb800 ;
   }
 
-  if ( ( img_buf8 = (char*)_malloca ( buf_sz1 ) ) == NULL ) {
+  if ( ( img_buf8 = (uchar*)malloc ( buf_sz1 ) ) == NULL ) {
     puts ( "img_buf can't alloc" ) ;
     goto lb800 ;
   }
@@ -620,15 +645,15 @@ static int x_bmp_pic_conv4 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  _freea ( img_buf8 ) ;
+  free ( img_buf8 ) ;
   img_buf8 = NULL ;
-  _freea ( edge_map1 ) ;
+  free ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf8  != NULL ) _freea ( img_buf8  ) ;
-  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
+  if ( img_buf8  != NULL ) free ( img_buf8  ) ;
+  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -636,7 +661,7 @@ lb800 :
 
 static int x_bmp_pic_conv8 ( void )
 {
-  uint big_img_sw1 , oy1 , syl1 ;
+  int big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -663,12 +688,12 @@ static int x_bmp_pic_conv8 ( void )
   edge_xb1 = ( img_xl1 + 7 ) >> 3 ;
   edge_sz1 = edge_xb1 * buf_yl1 ;
 
-  if ( ( edge_map1 = (char*)_malloca ( edge_sz1 ) ) == NULL ) {
+  if ( ( edge_map1 = (uchar*)malloc ( edge_sz1 ) ) == NULL ) {
     puts ( "edge_map can't alloc" ) ;
     goto lb800 ;
   }
 
-  if ( ( img_buf8 = (char*)_malloca ( buf_sz1 ) ) == NULL ) {
+  if ( ( img_buf8 = (uchar*)malloc ( buf_sz1 ) ) == NULL ) {
     puts ( "img_buf can't alloc" ) ;
     goto lb800 ;
   }
@@ -691,15 +716,15 @@ static int x_bmp_pic_conv8 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  _freea ( img_buf8 ) ;
+  free ( img_buf8 ) ;
   img_buf8 = NULL ;
-  _freea ( edge_map1 ) ;
+  free ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf8  != NULL ) _freea ( img_buf8  ) ;
-  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
+  if ( img_buf8  != NULL ) free ( img_buf8  ) ;
+  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -707,7 +732,7 @@ lb800 :
 
 static int x_bmp_pic_conv24 ( void )
 {
-  uint big_img_sw1 , oy1 , syl1 ;
+  int big_img_sw1 , oy1 , syl1 ;
   uint img_xl1 , img_yl1 ;
   uint buf_sz1 ;
 
@@ -735,12 +760,12 @@ static int x_bmp_pic_conv24 ( void )
   edge_xb1 = ( img_xl1 + 7 ) >> 3 ;
   edge_sz1 = edge_xb1 * buf_yl1 ;
 
-  if ( ( edge_map1 = (char*)_malloca ( edge_sz1 ) ) == NULL ) {
+  if ( ( edge_map1 = (uchar*)malloc ( edge_sz1 ) ) == NULL ) {
     puts ( "edge_map can't alloc" ) ;
     goto lb800 ;
   }
 
-  if ( ( img_buf16 = (PIXEL *)_malloca ( buf_sz1 ) ) == NULL ) {
+  if ( ( img_buf16 = (PIXEL *)malloc ( buf_sz1 ) ) == NULL ) {
     puts ( "img_buf can't alloc" ) ;
     goto lb800 ;
   }
@@ -766,15 +791,15 @@ static int x_bmp_pic_conv24 ( void )
   }
 
   if ( verbose_mode != 0 ) printf ( "\n" ) ;
-  _freea ( img_buf16 ) ;
+  free ( img_buf16 ) ;
   img_buf16 = NULL ;
-  _freea ( edge_map1 ) ;
+  free ( edge_map1 ) ;
   edge_map1 = NULL ;
   return ( 0 ) ;
 
 lb800 :
-  if ( img_buf16 != NULL ) _freea ( img_buf16 ) ;
-  if ( edge_map1 != NULL ) _freea ( edge_map1 ) ;
+  if ( img_buf16 != NULL ) free ( img_buf16 ) ;
+  if ( edge_map1 != NULL ) free ( edge_map1 ) ;
   return ( - 1 ) ;
 }
 
@@ -783,8 +808,8 @@ lb800 :
 static void x_write_hdr ( int cl_bit1 )
 {
 
-    char hed[] = "PIC/MM/XSS/:";
-    str_write ( hed ) ;
+    const char hed[] = "PIC/MM/XSS/:";
+    str_write ( (uchar *)hed ) ;
     bit_write ( 8 , 0x1A ) ;
     bit_write ( 8 , 0 ) ;
     bit_write ( 16 , 0 ) ;
@@ -795,12 +820,12 @@ static void x_write_hdr ( int cl_bit1 )
 
 /* ---------------------------------------------------------------- */
 
-static void str_write ( char *str_pt1 )
+static void str_write ( uchar *str_pt1 )
 {
-  char wch1 ;
-  char * str_pt2 ;
+  uchar wch1 ;
+  uchar * str_pt2 ;
 
-  str_pt2 = (char *)str_pt1 ;
+  str_pt2 = (uchar *)str_pt1 ;
   while ( ( wch1 = * str_pt2 ++ ) != 0 ) bit_write ( 8 , wch1 ) ;
 }
 
@@ -826,7 +851,7 @@ static void x_conv_palette ( int cl_bit1 )
   }
 
   rgb_size1 = sizeof ( RGB_QUAD ) * cl_cnt1 ;
-  rgb_pt1 = (RGB_QUAD *) _malloca ( rgb_size1 ) ;
+  rgb_pt1 = (RGB_QUAD *) malloc ( rgb_size1 ) ;
 
   if ( fread ( rgb_pt1 , 1,rgb_size1, bmp_f)  != rgb_size1 ) {
     printf ( "%s can't read (color table)\n" , bmp_fname_pt1 ) ;
@@ -877,8 +902,8 @@ static void x_mark_diff_point1 ( int oy1 , int syl1 )
   int sy1 , bx1 , xcnt1 ;
   uint img_xl1 ;
   char cl1 , wch1 , wedge1 , wverbose1 ;
-  char * edge_map_pt1 ;
-  char * img_buf_pt1 ;
+  uchar * edge_map_pt1 ;
+  uchar * img_buf_pt1 ;
 
   cl1 = 0 ;
   sy1 = syl1 ;
@@ -919,11 +944,11 @@ static void x_compress1 ( int oy1 , int syl1 )
 {
   int sx1 , sy1 , bx1 , xcnt1 ;
   uint img_xl1 ;
-  char cl1 , wedge1 , wverbose1 ;
+  uchar cl1 , wedge1 , wverbose1 ;
   uchar wmask1;
   int wlen1 ;
-  char * edge_map_pt1 ;
-  char * img_buf_pt1 ;
+  uchar * edge_map_pt1 ;
+  uchar * img_buf_pt1 ;
 
   wlen1 = 0 ;
   sy1 = syl1 ;
@@ -980,9 +1005,9 @@ static void x_compress1 ( int oy1 , int syl1 )
 /* ---------------------------------------------------------------- */
 
 static void x_compress_chain1 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , char * img_buf_pt1 , char cl1 )
+    uchar * edge_map_pt1 , uchar * img_buf_pt1 , uchar cl1 )
 {
-  uint fsw1 , wlen1 , wdata1 ;
+  int fsw1 , wlen1 , wdata1 ;
   int img_xl1 ;
   uchar wmask1 ;
 
@@ -1044,8 +1069,8 @@ static void x_mark_diff_point4 ( int oy1 , int syl1 )
   int sx1 , sy1 , xcnt1 , bx1 ;
   uint img_xl1 ;
   char cl1 , cl2 , wch1 , wverbose1 ;
-  char * edge_map_pt1 ;
-  char * img_buf_pt1 ;
+  uchar * edge_map_pt1 ;
+  uchar * img_buf_pt1 ;
 
   memset ( edge_map1 , 0 , edge_sz1 ) ;
 
@@ -1097,10 +1122,10 @@ static void x_compress4 ( int oy1 , int syl1 )
 {
   int sx1 , sy1 , bx1 , xcnt1 ;
   uint img_xl1 ;
-  char cl1 , wedge1 , wmask1 , wverbose1 ;
+  uchar cl1 , wedge1 , wmask1 , wverbose1 ;
   int wlen1 ;
-  char * edge_map_pt1 ;
-  char * img_buf_pt1 ;
+  uchar * edge_map_pt1 ;
+  uchar * img_buf_pt1 ;
 
   wlen1 = 0 ;
   sy1 = syl1 ;
@@ -1169,11 +1194,11 @@ static void x_compress4 ( int oy1 , int syl1 )
 /* ---------------------------------------------------------------- */
 
 static void x_compress_chain4 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , char * img_buf_pt1 , char cl1 )
+    uchar * edge_map_pt1 , uchar * img_buf_pt1 , uchar cl1 )
 {
   int fsw1 , wlen1 , wdata1 ;
-  int img_xl1 ;
-  char cl2 ;
+  uint img_xl1 ;
+  uchar cl2 ;
   uchar cl_mask1 ;
 
   if ( ( sx1 & 1 ) == 0 ) {
@@ -1240,8 +1265,8 @@ static void x_mark_diff_point8 ( int oy1 , int syl1 )
   int sx1 , sy1 ;
   int img_xl1 ;
   char cl1 , cl2 , wverbose1 ;
-  char * edge_map_pt1 ;
-  char * img_buf_pt1 ;
+  uchar * edge_map_pt1 ;
+  uchar * img_buf_pt1 ;
 
   memset ( edge_map1 , 0 , edge_sz1 ) ;
 
@@ -1272,10 +1297,10 @@ static void x_compress8 ( int oy1 , int syl1 )
 {
   int sx1 , sy1 , bx1 , xcnt1 ;
   uint img_xl1 ;
-  char cl1 , wedge1 , wmask1 , wverbose1 ;
+  uchar cl1 , wedge1 , wmask1 , wverbose1 ;
   int wlen1 ;
-  char * edge_map_pt1 ;
-  char * img_buf_pt1 ;
+  uchar * edge_map_pt1 ;
+  uchar * img_buf_pt1 ;
 
   wlen1 = 0 ;
   sy1 = syl1 ;
@@ -1332,7 +1357,7 @@ static void x_compress8 ( int oy1 , int syl1 )
 /* ---------------------------------------------------------------- */
 
 static void x_compress_chain8 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , char * img_buf_pt1 , char cl1 )
+    uchar * edge_map_pt1 , uchar * img_buf_pt1 , uchar cl1 )
 {
   int fsw1 , wlen1 , wdata1 ;
   int img_xl1 ;
@@ -1392,12 +1417,12 @@ static void x_compress_chain8 ( int sx1 , int sy1 ,
 static void x_read_bmp_image24 ( int oy1 , int syl1 )
 {
   int img_xl1 , bmp_xb1 ;
-  char * bmp_buf1 ;
+  uchar * bmp_buf1 ;
   PIXEL * img_pt1 ;
 
   img_xl1 = bmp_inf_hdr . biWidth ;
   bmp_xb1 = ( img_xl1 * 3 + 3 ) & ~ 3 ;		/* BMP line width */
-  bmp_buf1 = (char*) _malloca ( bmp_xb1 ) ;
+  bmp_buf1 = (uchar*) malloc ( bmp_xb1 ) ;
 
   if ( fseek ( bmp_f , bmp_fil_hdr . bfOffBits +
                bmp_xb1 * ( bmp_inf_hdr . biHeight - oy1 - syl1 ) ,
@@ -1438,7 +1463,7 @@ static void mk_cnvtbl ( void )
 
 /* ---------------------------------------------------------------- */
 
-static void x_conv_line24 ( PIXEL * img_pt1 , char * bmp_pt1 , int sxl1 )
+static void x_conv_line24 ( PIXEL * img_pt1 , uchar * bmp_pt1 , int sxl1 )
 {
   int wred1 , wgreen1 , wblue1 ;
 
@@ -1479,7 +1504,7 @@ static void x_mark_diff_point16 ( int oy1 , int syl1 )
   int img_xl1 ;
   PIXEL cl1 , cl2 ;
   char wverbose1 ;
-  char * edge_map_pt1 ;
+  uchar * edge_map_pt1 ;
   PIXEL * img_buf_pt1 ;
 
   memset ( edge_map1 , 0 , edge_sz1 ) ;
@@ -1512,9 +1537,9 @@ static void x_compress15 ( int oy1 , int syl1 )
   int sx1 , sy1 , bx1 , xcnt1 ;
   uint img_xl1 ;
   PIXEL cl1 ;
-  char wedge1 , wmask1 , wverbose1 ;
+  uchar wedge1 , wmask1 , wverbose1 ;
   int wlen1 ;
-  char * edge_map_pt1 ;
+  uchar * edge_map_pt1 ;
   PIXEL * img_buf_pt1 ;
 
   wlen1 = 0 ;
@@ -1572,7 +1597,7 @@ static void x_compress15 ( int oy1 , int syl1 )
 /* ---------------------------------------------------------------- */
 
 static void x_compress_chain15 ( int sx1 , int sy1 ,
-    char * edge_map_pt1 , PIXEL * img_buf_pt1 , PIXEL cl1 )
+    uchar * edge_map_pt1 , PIXEL * img_buf_pt1 , PIXEL cl1 )
 {
   int fsw1 , wlen1 , wdata1 ;
   int img_xl1 ;
